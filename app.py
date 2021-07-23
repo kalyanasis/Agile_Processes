@@ -50,9 +50,10 @@ class TaskList(db.Model):
     task_description = db.Column(db.String(255), nullable=True)
     created_on  = db.Column(db.String(200), nullable=True)
     taken_on    = db.Column(db.String(200), nullable=True)
+    completed_on    = db.Column(db.String(200), nullable=True)
     task_status = db.Column(db.String(200), nullable=True)
     remarks     = db.Column(db.String(200), nullable=True)
-    def __init__(self, assign_to,created_by,project_id,task_title,task_description,created_on,taken_on,task_status,remarks):
+    def __init__(self, assign_to,created_by,project_id,task_title,task_description,created_on,taken_on,task_status,remarks,completed_on):
         self.assign_to      = assign_to
         self.created_by     = created_by
         self.project_id     = project_id
@@ -62,9 +63,9 @@ class TaskList(db.Model):
         self.taken_on       = taken_on
         self.task_status    = task_status
         self.remarks        = remarks
-
+        self.completed_on   = completed_on
     def __repr__(self) -> str:
-        return f"{self.id} - {self.assign_to} - {self.created_by} - {self.project_id}- {self.task_title}- {self.task_description}- {self.created_on}- {self.taken_on}- {self.task_status}- {self.remarks}"
+        return f"{self.id} - {self.assign_to} - {self.created_by} - {self.project_id}- {self.task_title}- {self.task_description}- {self.created_on}- {self.taken_on}- {self.task_status}- {self.remarks}- {self.completed_on}"
 
 
 #  New code Start
@@ -85,12 +86,21 @@ def home():
 def login():
     """Login Form"""
     if request.method == 'GET':
-        return render_template('login.html')
+        if session['user_id']:
+            if session['user_type'] == 0:
+                print("session===", session)
+                all_data = Employee.query.all()
+                all_projects = ProjectList.query.filter_by(created_by = session['user_id'])
+                list_data = db.session.query(TaskList, Employee).join(Employee)
+                return render_template("dashboard.html", employees = all_data,projects = all_projects,task_data = list_data)
+            else:                    
+                list_data = db.session.query(TaskList, ProjectList).join(ProjectList)
+                return render_template('userdashboard.html',task_list = list_data)
+        else:
+            return render_template('login.html')
     else:
         useremail = request.form['useremail']
         passw = request.form['password']
-        print("useremail+++++++++", useremail)
-        print("passw+++++++++", passw)
 
         # try:
         data = Employee.query.filter_by(email=useremail, password=passw).first()
@@ -104,7 +114,9 @@ def login():
                 all_data = Employee.query.all()
                 all_projects = ProjectList.query.filter_by(created_by = data.id)
                 # list_data = TaskList.query.filter_by(created_by=session['user_id']).all()
+                print("session=============", session['user_id'])
                 list_data = db.session.query(TaskList, Employee).join(Employee)
+                # list_data = list_data.filter_by(TaskList.created_by==session['user_id'])
                 return render_template("dashboard.html", employees = all_data,projects = all_projects,task_data = list_data)
             else:                    
                 # list_data = TaskList.query.filter_by(assign_to=data.id).all()
@@ -154,11 +166,12 @@ def Index():
     if session['user_type'] == 0:
         all_projects    = ProjectList.query.filter_by(created_by = session['user_id'])
         # list_data       = TaskList.query.filter_by(created_by=session['user_id']).all()
+        # list_data = db.session.query(TaskList, Employee).join(Employee)
         list_data = db.session.query(TaskList, Employee).join(Employee)
         return render_template("dashboard.html", employees = all_data,projects = all_projects,task_data = list_data)
     else:
-        # list_data = TaskList.query.filter_by(assign_to=session['user_id']).all()
         list_data = db.session.query(TaskList, ProjectList).join(ProjectList)
+        # list_data = db.session.query(TaskList, ProjectList).join(ProjectList).filter_by(assign_to=session['user_id'])
         return render_template('userdashboard.html',task_list = list_data)
 
 #this route is for inserting data to SqLite database via html forms
@@ -198,9 +211,10 @@ def createtask():
         project_id          = request.form['project_id']
         created_on          = datetime.now()
         taken_on            = ""
+        completed_on        = ""
         task_status         = "To Do"
         remarks             = ""
-        my_data             = TaskList(assign_to,created_by,project_id,task_title,task_description,created_on,taken_on,task_status,remarks)
+        my_data             = TaskList(assign_to,created_by,project_id,task_title,task_description,created_on,taken_on,task_status,remarks,completed_on)
         db.session.add(my_data)
         db.session.commit()
         flash("Task Created Successfully")
@@ -218,7 +232,7 @@ def update():
         my_data.email       = request.form['email']
         my_data.password    = request.form['password']
         db.session.commit()
-        flash("Employee Updated Successfully")
+        flash("Employee Updated Successfully",'employee')
         return redirect(url_for('Index'))
 
 @app.route('/projectupdate', methods = ['GET', 'POST'])
@@ -228,7 +242,7 @@ def projectupdate():
         my_data.project_name = request.form['project_name']
         my_data.project_description = request.form['project_description']
         db.session.commit()
-        flash("Project Updated Successfully")
+        flash("Project Updated Successfully",'project')
         return redirect(url_for('Index'))
 
 @app.route('/updatestatus', methods = ['GET', 'POST'])
@@ -237,12 +251,16 @@ def updatestatus():
         my_data = TaskList.query.get(request.form.get('id'))
         task_status = request.form.get('task_status')
         taken_on = my_data.taken_on
+        completed_on = my_data.completed_on
         if task_status == "In Progress":
             taken_on = datetime.now()
+        if task_status == "Complete":
+            completed_on = datetime.now()
         my_data.task_status = task_status
         my_data.taken_on = taken_on
+        my_data.completed_on = completed_on
         db.session.commit()
-        flash("Task Updated Successfully")
+        flash("Task Updated Successfully",'status')
         return redirect(url_for('Index'))
         
 @app.route('/updatetask', methods = ['GET', 'POST'])
@@ -263,7 +281,7 @@ def updatetask():
 
 
         db.session.commit()
-        flash("Task Updated Successfully")
+        flash("Task Updated Successfully",'task')
         return redirect(url_for('Index'))
 
 
@@ -274,7 +292,7 @@ def delete(id):
     my_data = Employee.query.get(id)
     db.session.delete(my_data)
     db.session.commit()
-    flash("Employee Deleted Successfully")
+    flash("Employee Deleted Successfully",'employee')
     return redirect(url_for('Index'))
 
 @app.route('/deletetask/<id>/', methods = ['GET', 'POST'])
@@ -282,7 +300,7 @@ def deletetask(id):
     my_data = TaskList.query.get(id)
     db.session.delete(my_data)
     db.session.commit()
-    flash("Task Deleted Successfully")
+    flash("Task Deleted Successfully",'task')
     return redirect(url_for('Index'))
 
 
@@ -292,7 +310,7 @@ def projectdelete(id):
     my_data = ProjectList.query.get(id)
     db.session.delete(my_data)
     db.session.commit()
-    flash("Project Deleted Successfully")
+    flash("Project Deleted Successfully",'project')
     return redirect(url_for('Index'))
 
 
