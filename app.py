@@ -161,12 +161,10 @@ def Index():
     all_data = Employee.query.all()
     if session['user_type'] == 0:
         all_projects    = ProjectList.query.filter_by(created_by = session['user_id'])
-        # list_data       = TaskList.query.filter_by(created_by=session['user_id']).all()
-        list_data = db.session.query(TaskList, Employee).join(Employee).filter(created_by=session['user_id'])
+        list_data = db.session.query(TaskList, Employee).join(Employee).filter(TaskList.created_by==session['user_id'])
         return render_template("dashboard.html", employees = all_data,projects = all_projects,task_data = list_data)
     else:
-        # list_data = db.session.query(TaskList, ProjectList).join(ProjectList)
-        list_data = db.session.query(TaskList, ProjectList).join(ProjectList).filter(assign_to=session['user_id'])
+        list_data = db.session.query(TaskList, ProjectList).join(ProjectList).filter(TaskList.assign_to==session['user_id'])
         return render_template('userdashboard.html',task_list = list_data)
 
 #this route is for inserting data to SqLite database via html forms
